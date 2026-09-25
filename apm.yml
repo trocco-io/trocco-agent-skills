@@ -1,0 +1,16 @@
+name: trocco-agent-skills
+version: 0.1.0
+description: TROCCO の運用業務を AI エージェント（Claude Code / Codex 等）で半自動化する skill 集（audit / govern / optimize / export）。
+license: MIT
+author: primenumber Inc.
+repository: https://github.com/trocco-io/trocco-agent-skills
+homepage: https://github.com/trocco-io/trocco-agent-skills
+keywords:
+  - trocco
+  - etl
+  - data-pipeline
+  - public-api
+  - ops
+includes: auto
+scripts:
+  check: bash scripts/sync-references.sh --check

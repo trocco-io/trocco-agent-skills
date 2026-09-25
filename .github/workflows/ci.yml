@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      # 外部 Action は SHA で固定する（サプライチェーン対策）
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: 共有ドキュメントの同期ずれを検査
+        # knowledge/ が canonical。各 skill の references/ と乖離していないことを確認する。
+        run: bash scripts/sync-references.sh --check
+
+      - name: 相対リンク切れを検査
+        run: |
+          broken=0
+          while IFS= read -r f; do
+            d=$(dirname "$f")
+            for lk in $(grep -oE '\]\((\./|\.\./)?[A-Za-z0-9._/-]+\.md\)' "$f" 2>/dev/null | sed -E 's/\]\(//; s/\)//' || true); do
+              case "$lk" in http*) continue;; esac
+              [ -f "$d/$lk" ] || { echo "BROKEN: $f -> $lk"; broken=$((broken+1)); }
+            done
+          done < <(find . -name '*.md' -not -path './.git/*' -not -path './apm_modules/*')
+          echo "broken=$broken"
+          [ "$broken" -eq 0 ]
+
+      - name: シェルスクリプトの構文検査
+        run: |
+          for f in bin/trocco-api.sh .apm/hooks/scripts/*.sh scripts/*.sh; do
+            [ -f "$f" ] || continue
+            bash -n "$f" && echo "ok: $f"
+          done
+
+      - name: 漏洩ガード hook の回帰テスト
+        # 遮断すべきコマンドが block され、正当なコマンドが通ることを確認する。
+        run: |
+          H=.apm/hooks/scripts/guard-trocco-secret.sh
+          fail=0
+          expect() { # $1=deny|allow  $2=command
+            # hook が exit 2 を返すのは正常系。errexit で落ちないよう `|| rc=$?` で受ける。
+            rc=0
+            printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$2" | bash "$H" >/dev/null 2>&1 || rc=$?
+            got=allow; [ "$rc" -eq 2 ] && got=deny
+            if [ "$got" != "$1" ]; then echo "NG (expected $1, got $got): $2"; fail=1
+            else echo "ok ($got): $2"; fi
+          }
+          expect deny  'echo $TROCCO_API_KEY'
+          expect deny  'printenv'
+          expect deny  'env'
+          expect deny  'declare -p'
+          expect deny  'curl -v https://trocco.io/api/teams'
+          expect deny  'curl -sSv https://example.com'
+          expect deny  'curl -sS https://trocco.io/api/job_definitions'
+          expect deny  'curl -sS -H \"Authorization: Token $TROCCO_API_KEY\" https://trocco.io/api/teams'
+          expect allow  'bin/trocco-api.sh /job_definitions?limit=200'
+          expect allow  'bash .claude/skills/audit-2fa/scripts/trocco-api.sh /job_definitions?limit=200'
+          expect allow  'set -euo pipefail; jq . file.json'
+          expect allow  'env FOO=bar ls'
+          expect allow  'curl -sS https://example.com/data.json'
+          expect allow  'git commit -m \"feat: add\"'
+          [ "$fail" -eq 0 ]
+
+      - name: 紛らわしいダッシュ記号の検査
+        # em dash(—) / en dash(–) / horizontal bar(―) / minus(−) は字形が似ていて
+        # 目視でも grep でも見落とすため、文字コードで機械的に検出する。
+        # 長音「ー」(U+30FC) は日本語として正当なので対象外。
+        run: |
+          python3 - <<'EOF'
+          import pathlib, sys
+          BAD = {'\u2014': 'em dash', '\u2013': 'en dash',
+                 '\u2015': 'horizontal bar', '\u2212': 'minus sign'}
+          hits = []
+          for f in pathlib.Path('.').rglob('*.md'):
+              if 'apm_modules' in f.parts or '.git' in f.parts:
+                  continue
+              for i, line in enumerate(f.read_text(encoding='utf-8').splitlines(), 1):
+                  for ch, name in BAD.items():
+                      if ch in line:
+                          hits.append(f"{f}:{i}: {name} ({ch}) -> {line.strip()[:70]}")
+          if hits:
+              print("\n".join(hits))
+              print(f"\n{len(hits)} 件の紛らわしいダッシュ記号が見つかりました。"
+                    "ASCII ハイフンや句読点に置き換えてください。")
+              sys.exit(1)
+          print("ok: 該当なし")
+          EOF
+
+      - name: apm のインストール
+        # 公式インストーラは curl | sh で、取得したスクリプトに任意コード実行を許す。
+        # さらに Releases API の匿名レート制限（HTTP 403）を避けるため GITHUB_TOKEN が必要で、
+        # そのトークンをスクリプトから読めてしまう。外部 Action を SHA 固定する方針とも合わない。
+        # リリース資産を直接取得し、公開されている sha256 で検証する。資産のダウンロードは
+        # 匿名で可能なため、このステップにトークンは渡さない。
+        run: |
+          base=https://github.com/microsoft/apm/releases/latest/download
+          asset=apm-linux-x86_64.tar.gz
+          curl -sSfL -O "$base/$asset"
+          curl -sSfL -O "$base/$asset.sha256"
+          sha256sum -c "$asset.sha256"
+          # 書庫は apm-linux-x86_64/{apm,_internal/...} という構成。バイナリは
+          # 隣の _internal を参照するため、ディレクトリごと展開して symlink を張る。
+          mkdir -p "$HOME/.local/lib" "$HOME/.local/bin"
+          tar -xzf "$asset" -C "$HOME/.local/lib"
+          ln -sf "$HOME/.local/lib/apm-linux-x86_64/apm" "$HOME/.local/bin/apm"
+          rm -f "$asset" "$asset.sha256"
+          "$HOME/.local/bin/apm" --version
+
+      - name: hook がエージェントへ正しく配線されるか検査
+        # hook 定義のコマンドをクォートで囲むと apm のパス書き換えが働かず、
+        # 未定義の ${PLUGIN_ROOT} がそのまま settings.json に残る。hook は fail-open なので
+        # 気付かないまま素通りする。実際に install した結果で配線の成立を確認する。
+        # apm はバージョンにより ${CLAUDE_PROJECT_DIR} 基準か相対パスかで書き換えるため、
+        # ${CLAUDE_PROJECT_DIR} だけは解決したうえで残存変数を検査する。
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          work=$(mktemp -d); cp -R . "$work/pkg"; mkdir "$work/proj"; cd "$work/proj"
+          apm init >/dev/null 2>&1 || true
+          apm install "$work/pkg" --target claude >/dev/null 2>&1
+          raw=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' .claude/settings.json)
+          echo "raw command: $raw"
+          cmd=${raw%\"}; cmd=${cmd#\"}
+          cmd=${cmd//'${CLAUDE_PROJECT_DIR}'/$PWD}
+          echo "resolved    : $cmd"
+          case "$cmd" in
+            *'${'*) echo "NG: 未定義の変数が残っている（apm のパス書き換えが効いていない）"; exit 1 ;;
+          esac
+          [ -x "$cmd" ] || { echo "NG: $cmd が実行可能ファイルとして存在しない"; exit 1; }
+          rc=0
+          printf '{"tool_name":"Bash","tool_input":{"command":"echo $TROCCO_API_KEY"}}' \
+            | "$cmd" >/dev/null 2>&1 || rc=$?
+          [ "$rc" -eq 2 ] || { echo "NG: 配置後の hook が block しない (rc=$rc)"; exit 1; }
+          echo "ok: hook が配線され block も機能する"
+
+      - name: apm audit（改ざん・ドリフト検査）
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          apm install --target claude
+          apm audit

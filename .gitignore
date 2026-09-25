@@ -1,0 +1,17 @@
+# APM dependencies / cache
+apm_modules/
+
+# APM lockfile — このリポジトリは source パッケージ（依存なし）のため lockfile はコミットしない。
+# 消費側プロジェクトが各自の apm.lock.yaml を生成する。
+apm.lock.yaml
+
+# apm install が生成する各エージェントへのデプロイ出力（source は .apm/ 。これらは生成物）
+.agents/
+.codex/
+.cursor/
+.gemini/
+.github/skills/
+.claude/skills/
+
+# Tier 1 の 1Password 参照ファイル（op:// のみを書く。テンプレは bin/.env.template）
+bin/.env
