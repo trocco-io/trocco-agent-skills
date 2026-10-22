@@ -3,7 +3,7 @@
 > 2026-09-09 時点の公開仕様に基づく要約。齟齬があれば https://documents.trocco.io/apidocs.md を正とする。
 
 定義名（`name`）の命名規則を実データから導出し、非準拠を一括修正するための知識。
-まず [`trocco-api.md`](./trocco-api.md) を読むこと。
+まず [`trocco-api.md`](./trocco-api.md) と、更新の挙動をまとめた [`trocco-api-update.md`](./trocco-api-update.md) を読むこと。
 
 ## `name` の API 制約（4 種共通・実確認済み）
 

@@ -3,7 +3,7 @@
 > 2026-09-09 時点の公開仕様に基づく要約。齟齬があれば https://documents.trocco.io/apidocs.md を正とする。
 
 「全件洗い替え」の BigQuery データマートを「増分更新」または「SCD Type 2」へ切り替える知識。
-まず [`trocco-api.md`](./trocco-api.md) を読むこと。
+まず [`trocco-api.md`](./trocco-api.md) と、更新の挙動をまとめた [`trocco-api-update.md`](./trocco-api-update.md) を読むこと。
 
 > 参考記事（手動手順・判定基準の一次情報）:
 > https://zenn.dev/primenumber/articles/c269ce4d26f3e6

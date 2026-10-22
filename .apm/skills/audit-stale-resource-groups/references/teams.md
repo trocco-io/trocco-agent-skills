@@ -3,7 +3,7 @@
 > 2026-09-09 時点の公開仕様に基づく要約。齟齬があれば https://documents.trocco.io/apidocs.md を正とする。
 
 利用実態の薄いチームの棚卸し・統合を支援するための知識。
-まず `trocco-api.md`、関連して `resource-groups.md` を読むこと。
+まず `trocco-api.md` と `trocco-api-update.md`、関連して `resource-groups.md` を読むこと。
 
 ## チームスキーマ `/teams`
 

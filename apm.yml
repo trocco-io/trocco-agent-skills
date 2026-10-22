@@ -1,5 +1,5 @@
 name: trocco-agent-skills
-version: 0.1.0
+version: 0.2.0
 description: TROCCO の運用業務を AI エージェント（Claude Code / Codex 等）で半自動化する skill 集（audit / govern / optimize / export）。
 license: MIT
 author: primenumber Inc.

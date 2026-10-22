@@ -31,6 +31,7 @@ bash .claude/skills/optimize-transfer-incremental/scripts/trocco-api.sh "/job_de
 
 ## 前提知識（必ず先に読む）
 - [`knowledge/trocco-api.md`](./references/trocco-api.md)
+- [`knowledge/trocco-api-update.md`](./references/trocco-api-update.md): 更新（PATCH）の挙動（差分更新・配列の洗い替え・ネストの部分更新）とエラーレスポンスの形
 - [`knowledge/incremental-transfer.md`](./references/incremental-transfer.md)
 - 適否判定は [`knowledge/datamart-write-modes.md`](./references/datamart-write-modes.md) の「切り替え不可の 5 パターン」を流用
 

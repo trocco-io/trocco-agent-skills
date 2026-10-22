@@ -24,6 +24,24 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_URL="${TROCCO_API_BASE_URL:-https://trocco.io/api}"
 TOKEN_FILE="${TROCCO_TOKEN_FILE:-$HOME/.config/trocco/token}"
 
+# --- User-Agent ---------------------------------------------------------------
+# この skill 集からの呼び出しであることを API のアクセスログで識別できるよう、固有の User-Agent を付ける。
+#   形式: trocco-agent-skills/<version> (<skill 名>)
+# version は apm.yml の version と一致させる（CI で検査する）。
+# skill 名は、このスクリプトが各スキルの scripts/ に複製されて置かれる場所（.../skills/<name>/scripts/）から取る。
+# それ以外の場所（リポジトリの bin/ など）から呼ばれた場合は skill 名を付けない。
+TROCCO_AGENT_SKILLS_VERSION="0.2.0"
+USER_AGENT="trocco-agent-skills/${TROCCO_AGENT_SKILLS_VERSION}"
+case "$script_dir" in
+  */skills/*/scripts)
+    skill_name="$(basename "$(dirname "$script_dir")")"
+    # curl の設定ファイルに埋め込むため、引用符などを含む名前は付けない
+    case "$skill_name" in
+      *[!A-Za-z0-9._-]*) : ;;
+      *) USER_AGENT="${USER_AGENT} (${skill_name})" ;;
+    esac ;;
+esac
+
 die() { printf 'trocco-api: %s\n' "$1" >&2; exit 1; }
 
 [ "$#" -ge 1 ] || die "usage: trocco-api.sh <path> [curl args...]   (例: /job_definitions?limit=200)"
@@ -104,7 +122,7 @@ for arg in "$@"; do
   case "$arg" in
     -o|--output|-O|--remote-name|-D|--dump-header|-w|--write-out)
       exec curl -sS --fail-with-body \
-        --config <(printf 'header = "Authorization: Token %s"\n' "$TROCCO_API_KEY") \
+        --config <(printf 'header = "Authorization: Token %s"\nuser-agent = "%s"\n' "$TROCCO_API_KEY" "$USER_AGENT") \
         "${BASE_URL}${api_path}" "$@" ;;
   esac
 done
@@ -119,7 +137,7 @@ while : ; do
   # -H に直接展開するとキーがプロセスの引数（ps で参照可能）に載るため。
   # printf は bash の組み込みコマンドなので、ここでも別プロセスの引数には現れない。
   code="$(curl -sS -o "$body" -D "$hdr" -w '%{http_code}' \
-    --config <(printf 'header = "Authorization: Token %s"\n' "$TROCCO_API_KEY") \
+    --config <(printf 'header = "Authorization: Token %s"\nuser-agent = "%s"\n' "$TROCCO_API_KEY" "$USER_AGENT") \
     "${BASE_URL}${api_path}" "$@")" || true
 
   if [ "$code" != "429" ] || [ "$attempt" -ge "$max_retry" ]; then

@@ -1,0 +1,5 @@
+# 各スキルの references/ と scripts/trocco-api.sh は、knowledge/ と bin/ から
+# scripts/sync-references.sh が生成する複製（apm はスキル外のファイルを配布しないため同梱している）。
+# 編集は canonical 側で行うので、PR の差分では生成物として折りたたむ。
+.apm/skills/*/references/*.md linguist-generated=true
+.apm/skills/*/scripts/trocco-api.sh linguist-generated=true

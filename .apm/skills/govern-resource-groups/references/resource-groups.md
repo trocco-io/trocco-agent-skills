@@ -2,7 +2,7 @@
 
 > 2026-09-09 時点の公開仕様に基づく要約。齟齬があれば https://documents.trocco.io/apidocs.md を正とする。
 
-まず `trocco-api.md` を読むこと。
+まず `trocco-api.md` と、更新の挙動をまとめた `trocco-api-update.md` を読むこと。
 
 ## モデル
 

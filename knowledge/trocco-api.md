@@ -1,9 +1,16 @@
 # TROCCO API: 基礎知識
 
-> 2026-09-09 時点の公開仕様に基づく要約。齟齬があれば https://documents.trocco.io/apidocs.md を正とする。
+> 2026-10-20 時点の公開仕様に基づく要約。齟齬があれば https://documents.trocco.io/apidocs.md を正とする。
 
 すべての skill が前提とする、TROCCO API の共通仕様。
 skill を実行する前に、まずこのファイルを読むこと。
+
+話題別の知識は別ファイルにある。skill の「前提知識」に挙がっているものだけを読めばよい。
+
+- [`trocco-api-update.md`](./trocco-api-update.md): 更新（PATCH）の挙動（差分更新・配列の洗い替え・ネストの部分更新）とエラーレスポンスの形
+
+リソースとジョブのエンドポイント一覧は、リポジトリの `knowledge/trocco-api-endpoints.md` にある。
+skill を設計するときの参照用で、skill には同梱しない（実行中の skill は自分の前提知識に載っているエンドポイントを使う）。
 
 ## 認証とベース URL: ラッパー経由で呼ぶ
 
@@ -19,10 +26,6 @@ API は **`trocco-api.sh` 経由**で呼ぶ。`curl` で直接叩かない。
 ```bash
 # 例: 転送設定一覧を取得
 trocco-api.sh '/job_definitions?limit=100'
-
-# 例: 更新（PATCH）
-trocco-api.sh /job_definitions/123 -X PATCH \
-  -H 'Content-Type: application/json' -d @payload.json
 ```
 
 ラッパーが API キーを解決する（1Password / トークンファイル / 環境変数の順）。
@@ -41,6 +44,7 @@ trocco-api.sh /job_definitions/123 -X PATCH \
 一覧系エンドポイント（`index`）は cursor ベースのページネーション。
 
 - クエリパラメータ: `limit`（既定 50 / 上限 200）, `cursor`
+  - 公式の上限は 100（`/job_definitions`）だが、`limit=200` でも 200 件返る（実測で確認済み）。
 - レスポンス封筒: `{ "items": [...], "next_cursor": "<base64>" | null }`
 - `next_cursor` が `null` になるまで繰り返し取得する。
 
@@ -75,84 +79,23 @@ fetch_all job_definitions | jq -s '.' > "${TMPDIR:-/tmp}/job_definitions.json"
 > `jq: parse error: Invalid string: control characters ... must be escaped` で**全件が落ちる**。
 > 上記のように **curl の出力を一旦ファイルに落として `jq -f`（ファイル引数）で読む**こと。
 
-## リソース種別と主要エンドポイント
+> [!IMPORTANT]
+> **空配列のフィールドはレスポンスからキーごと省略される**。`schedules` / `notifications` などは
+> 「設定が無い定義では key 自体が存在しない」。判定は `(.schedules // [])` のように**存在しない前提**で書く。
 
-| 種別 | 日本語 | ベースパス | index/show/create/update/destroy |
-|---|---|---|---|
-| 転送設定 | Transfer | `/job_definitions` | ✅ / ✅ / ✅ / ✅(PATCH) / ✅ |
-| データマート定義 | Datamart | `/datamart_definitions` | ✅ / ✅ / ✅ / ✅(PATCH member `update`) / ✅ |
-| ワークフロー定義 | Pipeline | `/pipeline_definitions` | ✅ / ✅ / ✅ / ✅(PATCH) / ✅ |
-| dbtジョブ設定 | dbt | `/dbt_job_definitions` | ✅ / ✅ / ✅ / ✅ / ✅ |
-| ユーザー | User | `/users` | ✅ / ✅ / ✅ / ✅ / ✅ |
-| リソースグループ | Resource Group | `/resource_groups` | ✅ / ✅ / ✅ / ✅ / ✅ |
-| 通知先 | Notification Destination | `/notification_destinations/:type` | ✅ / ✅ / ✅ / ✅ / ✅ |
-| チーム | Team | `/teams` | ✅ / ✅ / ✅ / ✅ / ✅ |
-| ラベル | Label | `/labels` | ✅ / ✅ / ✅ / ✅ / ✅ |
-| 接続情報 | Connection | `/connections/:connection_type` | ✅ / ✅ / ✅ / ✅ / ✅ |
+## 詳細取得（show）が 400 になるコネクタがある
 
-> ジョブ実行系: `/datamart_jobs`（create のみ）, `/job_definitions/:id/jobs`（index）, `/jobs/:id`, `/pipeline_jobs`。
+転送設定の一覧（index）には全件出るが、一部の転送元/先の組み合わせ（例: `custom_connector` ソース等）は
+詳細取得（`GET /job_definitions/:id`）や更新で
+**HTTP 400 `{"message":"指定された転送元先はまだサポートされていません"}`** を返す。
+**割合はアカウントによって大きく異なり、実測では転送設定サンプルの 2 割前後が該当したケースもある**（数 % で済むとは限らない）。
+→ detail を GET する skill は **400 を握って対象からスキップ**し、「非対応で処理できなかった件数」を報告すること。
 
-## 更新（PATCH）の重要な挙動: 差分更新だが配列は洗い替え
+## ジョブの実行ログは API で取得できる
 
-`job_definition` / `datamart_definition` / `pipeline_definition` の更新はいずれも
-**スカラー項目は差分更新（送った項目だけ変わる）／配列項目は洗い替え（送った配列で全置換）** という
-セマンティクスを持つ。OpenAPI の記述より:
-
-> 基本的に差分更新です。配列要素については洗い替えとなるため、すべての要素を指定する必要があります。
-> 配列要素を空にしたい場合明示的に空配列を指定してください。
-
-これが意味すること:
-
-- **スカラー**（`resource_group_id`, `description`, `name` など）→ その項目だけ PATCH すれば OK。他項目は保持される。
-  - 実測: `job_definition` に `description` だけを PATCH しても、`filter_columns` / `input_option` /
-    `output_option` / `schedules` はすべて保持された。
-- **配列**（`notifications`, `schedules`, `labels` など）→ 送った配列が既存を**全置換**する。
-  - 通知を「追加」したい場合は **既存を GET → 配列に append → 全量を PATCH** する（既存通知を消さないため）。
-  - `[]` を送ると全削除される。**未指定なら変更されない**（差分更新のため）。
-
-> [!CAUTION]
-> **この差分更新は上記 3 種の定義だけの話**。チームとリソースグループには当てはまらない。
->
-> | エンドポイント | PATCH の必須項目 | 送らなかった場合 |
-> |---|---|---|
-> | `/teams/:id` | `name`, `members` | HTTP 500 |
-> | `/resource_groups/:id` | `name` | エラー |
->
-> これらは更新前に detail を GET し、変更しない項目も含めて全量を送ること。
-> 詳細は teams.md / resource-groups.md を参照。
-
-ネストオブジェクトも**部分更新**だった（実測）。変えたい項目だけを入れ子で送れば、同じオブジェクト内の
-他の項目は保持される。
-
-- データマートの `datamart_bigquery_option`: `write_disposition` だけを送っても、`query`（1 万文字超）・
-  `destination_dataset` / `destination_table` / `bigquery_connection_id` は保持された。
-- 転送設定の `output_option`: `mode` だけを送っても、出力先データセット / テーブル・接続 ID・
-  ロケーションは保持された。
-- 転送設定の `input_option`: 1 項目だけを送っても、入力カラム定義（100 件近く）は保持された。
-
-いずれもオブジェクト外の項目（`filter_columns` / `schedules` / `notifications` /
-`resource_group_id`）にも影響しなかった。
-
-> [!CAUTION]
-> **GET の結果をそのまま PATCH に投げ返すと失敗することがある**。GET レスポンスと PATCH 入力の
-> スキーマは一致しない。ワークフローでは実際に、API が自身の GET 出力を 400 で拒否する
-> （`tasks[].key` が GET に含まれず、`task_dependencies` が整数で返るため。workflows.md 参照）。
-> 複雑な変更は 1 項目ずつ構築し、実行前に必ずユーザーへ差分を提示すること。
-
-## エラーレスポンスの形が一定しない
-
-400 の本文は少なくとも 3 種類ある。どれか 1 つを前提にパースしない。
-
-```json
-{"message":"Bad request. Please check your request payload","errors":[{"attribute":"incremental_column","message":"Incremental columnを入力してください。"}]}
-{"message":"Tasks keyが必要です, Task dependenciesは無効な 配列 です","errors":[]}
-{"error":"タスクの依存関係が不正です"}
-```
-
-- `errors[].attribute` があるときは、どの項目が足りないかを特定できる。ユーザーへの報告に使う。
-- **404 `Not found` はリソース不在とは限らない**。ワークフローの PATCH では、タスクの `type` と
-  `definition_id` の種別が食い違うときにも 404 が返る（対象のワークフローは存在している）。
-- 削除済みリソースの GET は 404 ではなく **403 `Not Authorized`** が返ることがある。
+転送・データマート・dbt ジョブの実行ログ（エラーログを含む）は `GET /jobs/:id/logs` / `/datamart_jobs/:id/logs` /
+`/dbt_jobs/:id/logs` で取得できる（ワークフロージョブだけは不可）。**「API ではエラー内容を確認できない」と判断しない**。
+失敗原因を調べるときは `troubleshoot-job-logs` skill を使う。
 
 ## 安全に運用するための共通ルール
 
@@ -193,29 +136,13 @@ trocco-api.sh '/teams?limit=1' -o /dev/null -D - 2>/dev/null | grep -i x-rate-li
 
 | ステータス | 意味 | 対処 |
 |---|---|---|
-| 401 | API キー不正 / 未設定 | `$TROCCO_API_KEY` を確認 |
-| 403 | 権限不足（Policy 拒否） | 該当リソースへの権限（管理者 / リソースグループ role）を確認 |
+| 400 | 不正なリクエスト | `message` / `errors[]` を読む。本文の形は一定しない（変更系は trocco-api-update.md「エラーレスポンスの形が一定しない」） |
+| 401 | API キー不正 / 未設定（チーム・リソースグループの更新では権限不足も） | `$TROCCO_API_KEY` と権限を確認 |
+| 403 | 権限不足（Policy 拒否）。削除済みリソースの GET でも 404 ではなく `Not Authorized` が返ることがある | 該当リソースへの権限（管理者 / リソースグループ role）と、リソースが削除されていないかを確認 |
 | 404 | リソース無し | id / type を確認 |
 | 422 | バリデーションエラー | レスポンス `message` を読む。必須項目・enum 値の欠落が多い |
 | 429 | レート制限 | バックオフして再試行 |
-
-## 実地検証で判明した重要な挙動（要注意）
-
-以下は数千件規模のアカウントで検証して確認した挙動。skill 実装時は必ず考慮する。
-
-- **`index` に出るが `show`/`update` が非対応のコネクタがある**。転送設定の一覧（index）には全件出るが、
-  一部の転送元/先の組み合わせ（例: `custom_connector` ソース等）は詳細取得（`GET /job_definitions/:id`）で
-  **HTTP 400 `{"message":"指定された転送元先はまだサポートされていません"}`** を返す。
-  **割合はアカウントによって大きく異なり、実測では転送設定サンプルの 2 割前後が該当したケースもある**（数 % で済むとは限らない）。
-  → detail を GET する skill は **400 を握って対象からスキップ**し、「非対応で処理できなかった件数」を報告すること。
-- **空配列のフィールドはレスポンスからキーごと省略される**。`schedules` / `notifications` などは
-  「設定が無い定義では key 自体が存在しない」。判定は `(.schedules // [])` のように**存在しない前提**で書く。
-- **スケジュールの ON/OFF（有効/無効）状態は公開 API では取得できない**。`schedules[]` の要素は
-  `frequency` / `minute` / `hour` / `day` / `day_of_week` / `time_zone` のみで、**有効/無効フラグを持たない**。
-  UI 上で OFF にされたスケジュールも、ON のものと**同じ形**で返る。
-  → 「スケジュールがある = 実際に動いている」とは限らない。スケジュールの移設・削除を伴う skill
-  （[`workflows.md`](./workflows.md) の集約等）では、**ON/OFF は API から判別不能である旨を明示し、
-  対象ごとにユーザーへ確認**すること。
+| 503 | 一時的な取得失敗（実行ログ取得 API） | `Retry-After` の秒数だけ待って再試行 |
 
 ## 公式ドキュメントは URL の末尾に `.md` を付けて取得する
 

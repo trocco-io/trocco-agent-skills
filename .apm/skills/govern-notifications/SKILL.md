@@ -30,7 +30,8 @@ bash .claude/skills/govern-notifications/scripts/trocco-api.sh "/job_definitions
 ```
 
 ## 前提知識（必ず先に読む）
-- [`knowledge/trocco-api.md`](./references/trocco-api.md): 認証・ページネーション・「配列は洗い替え」
+- [`knowledge/trocco-api.md`](./references/trocco-api.md): 認証・ページネーション
+- [`knowledge/trocco-api-update.md`](./references/trocco-api-update.md): 更新（PATCH）の挙動（差分更新・配列の洗い替え・ネストの部分更新）とエラーレスポンスの形
 - [`knowledge/notifications.md`](./references/notifications.md): 通知先 / 通知のスキーマ（3 種で構造が違う）
 
 ## 手順
