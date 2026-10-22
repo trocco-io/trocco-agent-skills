@@ -30,6 +30,7 @@ bash .claude/skills/govern-resource-groups/scripts/trocco-api.sh "/job_definitio
 
 ## 前提知識（必ず先に読む）
 - [`knowledge/trocco-api.md`](./references/trocco-api.md)
+- [`knowledge/trocco-api-update.md`](./references/trocco-api-update.md): 更新（PATCH）の挙動（差分更新・配列の洗い替え・ネストの部分更新）とエラーレスポンスの形
 - [`knowledge/resource-groups.md`](./references/resource-groups.md)
 
 ## 手順

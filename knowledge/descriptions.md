@@ -3,7 +3,7 @@
 > 2026-09-09 時点の公開仕様に基づく要約。齟齬があれば https://documents.trocco.io/apidocs.md を正とする。
 
 説明が無い / 簡素な定義に、処理内容の説明文を付けるための知識。
-まず [`trocco-api.md`](./trocco-api.md) を読むこと。
+まず [`trocco-api.md`](./trocco-api.md) と、更新の挙動をまとめた [`trocco-api-update.md`](./trocco-api-update.md) を読むこと。
 
 ## `description` フィールド（3 種すべて書き込み可・スカラー）
 
@@ -42,7 +42,7 @@ fetch_all job_definitions | jq -r '
 - フィルタ（`filter_columns`, `filter_rows`, マスキング等）の有無
 - 差分転送 / 洗い替えの別、スケジュール
 
-→ 例:「MySQL `prod.orders` を BigQuery `analytics.orders` へ日次で全件洗い替え転送。updated_at で増分。」
+→ 例:「MySQL `prod.orders` を BigQuery `analytics.orders` へ全件洗い替え転送（スケジュール設定あり: 日次）。updated_at で増分。」
 
 ### データマート定義（datamart_definition）
 - `query`（実行 SQL）の要約: 何を集計/結合しているか
@@ -55,12 +55,15 @@ fetch_all job_definitions | jq -r '
 - `tasks` の種別と参照先定義名、`task_dependencies` の流れ
 - スケジュール
 
-→ 例:「注文転送 → 売上データマート生成の順で日次 5:00 実行。失敗時 Slack 通知。」
+→ 例:「注文転送 → 売上データマート生成の順で実行（スケジュール設定あり: 日次 5:00）。失敗時 Slack 通知。」
 
 ## 生成方針（一般ユーザー向けの注意）
 
 - **事実ベース**: GET した設定に書かれていることだけを説明する。SQL の意図を過剰に推測しない。
 - **簡潔**: 1〜3 文。「入力 → 処理 → 出力 → 頻度」の順が読みやすい。
+- **スケジュールを断定しない**: スケジュールの ON/OFF は公開 API では判別できない（`schedules[]` に有効/無効の
+  フラグが無く、UI で OFF にしたものも同じ形で返る）。`schedules` があっても「日次 5:00 実行」と言い切らず、
+  「スケジュール設定あり（日次 5:00）」程度にとどめるか、稼働しているかをユーザーに確認してから書く。
 - **PII / 秘匿情報を書かない**: 接続情報の認証値・個人情報・社外秘のテーブル名などを説明文に転記しない。
 - **確認**: 生成した説明文はユーザーに提示し、承認を得てから PATCH する。既存の（簡素でも）説明を
   上書きする場合は before/after を必ず見せる。

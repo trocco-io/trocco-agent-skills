@@ -1,7 +1,7 @@
 # trocco-agent-skills
 
 TROCCO の運用業務を、AI エージェント（Claude Code / Codex）と TROCCO API で半自動化する skill 集です。
-通知やリソースグループの棚卸し、洗い替えから差分転送への切り替え、命名規則の統一、Terraform エクスポートなどをまとめて任せられます。
+通知やリソースグループの棚卸し、洗い替えから差分転送への切り替え、命名規則の統一、Terraform エクスポート、失敗したジョブのログ調査などをまとめて任せられます。
 
 > [!IMPORTANT]
 > 本リポジトリは TROCCO の公式機能ではなく、実験的なプロジェクトです。予告なく変更・廃止される場合があります。
@@ -33,6 +33,8 @@ TROCCO の運用業務を、AI エージェント（Claude Code / Codex）と TR
 
 API は付属のラッパー `trocco-api.sh` 経由で呼び出します。ベース URL と認証ヘッダーはラッパーが
 所有するため、エージェントが API キーの値を参照する必要はありません。
+ラッパーは `User-Agent: trocco-agent-skills/<バージョン> (<skill 名>)` を付けて API を呼び出します。
+TROCCO 側でこの skill 集経由の利用状況を把握するためのもので、API キーや個人を特定する情報は含みません。
 ラッパーは各スキルに `scripts/trocco-api.sh` として同梱されており、エージェントが場所を解決して使います。
 
 セットアップの確認（インストール先は `--target` によって `.claude/` か `.agents/` に変わります）:
@@ -46,6 +48,7 @@ bash .claude/skills/audit-2fa/scripts/trocco-api.sh '/job_definitions?limit=10'
 skill は随時更新します。TROCCO 本体の仕様変更への追従、skill の追加、記述の誤りの修正や
 精度向上のための加筆などがあるため、新しく追加された skill を使いたいときや、
 skill の動作が現在の TROCCO と合わないと感じたときに更新してください。
+バージョンごとの変更内容は [CHANGELOG.md](CHANGELOG.md) にあります。
 
 ```bash
 apm update --dry-run      # 何が変わるかを確認する
@@ -58,6 +61,7 @@ apm がリモートから取得するため、リポジトリを clone してお
 ## 使い方
 
 「TROCCO で、通知が無い定義に通知をつけて」のように自然文で依頼すると、対応する skill が起動します。
+Claude Code では `/troubleshoot-job-logs 12345` のように skill 名を直接呼び出すこともできます。
 
 ## Skill 一覧
 
@@ -67,6 +71,7 @@ skill 名は `カテゴリ-` prefix で名前空間化しています。
 - `govern-` … 統制の整備（通知/リソースグループ/説明の付与、命名規則の統一）
 - `optimize-` … コスト・パフォーマンスの最適化
 - `export-` … IaC / エクスポート
+- `troubleshoot-` … 失敗したジョブの洗い出しと原因調査（読み取りのみ）
 
 | Skill | 何をするか | 主な操作 |
 |---|---|---|
@@ -81,6 +86,8 @@ skill 名は `カテゴリ-` prefix で名前空間化しています。
 | [`optimize-datamart-incremental`](.apm/skills/optimize-datamart-incremental/SKILL.md) | 洗い替えの BigQuery データマートを増分更新 / SCD Type 2 へ切り替え | 検出 + 変更（要確認） |
 | [`optimize-workflow-consolidation`](.apm/skills/optimize-workflow-consolidation/SKILL.md) | 個別スケジュールの定義をワークフローへ集約 | 提案 + 変更（要確認） |
 | [`export-terraform`](.apm/skills/export-terraform/SKILL.md) | 既存リソースから Terraform Provider 準拠の `.tf` を生成 | 列挙 + HCL 生成 |
+| [`troubleshoot-failed-jobs`](.apm/skills/troubleshoot-failed-jobs/SKILL.md) | 期間・定義を指定して転送ジョブの実行結果を取得し、失敗しているジョブを洗い出す | 読み取りのみ |
+| [`troubleshoot-job-logs`](.apm/skills/troubleshoot-job-logs/SKILL.md) | ジョブ（転送・データマート・dbt）の実行ログと定義の現況を取得し、失敗原因と打ち手（設定修正・問い合わせ・リトライ）を提示 | 読み取りのみ |
 
 ## 安全に使うために
 
@@ -95,7 +102,9 @@ skill 名は `カテゴリ-` prefix で名前空間化しています。
 - [`knowledge/`](knowledge/): 各 skill が参照する、TROCCO API を利用するうえでのリファレンスです。
   skill の実行時にエージェントが読むため、利用するだけであれば目を通す必要はありません。
   内部の挙動を確認したい場合や skill を追加したい場合に参照してください
-  （TROCCO API の共通仕様は [`trocco-api.md`](knowledge/trocco-api.md) にあります）。
+  （TROCCO API の共通仕様は [`trocco-api.md`](knowledge/trocco-api.md)、更新（PATCH）の挙動は
+  [`trocco-api-update.md`](knowledge/trocco-api-update.md)、エンドポイントの一覧は
+  [`trocco-api-endpoints.md`](knowledge/trocco-api-endpoints.md) にあります）。
   ここと `bin/trocco-api.sh` が単一ソースで、各 skill の `references/` と `scripts/` へは
   `scripts/sync-references.sh` が複製します（`--check` で同期ずれを検査できます）。
 

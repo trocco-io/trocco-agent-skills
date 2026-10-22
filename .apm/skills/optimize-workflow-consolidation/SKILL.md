@@ -31,6 +31,7 @@ bash .claude/skills/optimize-workflow-consolidation/scripts/trocco-api.sh "/job_
 
 ## 前提知識（必ず先に読む）
 - [`knowledge/trocco-api.md`](./references/trocco-api.md)
+- [`knowledge/trocco-api-update.md`](./references/trocco-api-update.md): 更新（PATCH）の挙動（差分更新・配列の洗い替え・ネストの部分更新）とエラーレスポンスの形
 - [`knowledge/workflows.md`](./references/workflows.md): タスク/依存/スケジュールのスキーマ
 
 ## 手順

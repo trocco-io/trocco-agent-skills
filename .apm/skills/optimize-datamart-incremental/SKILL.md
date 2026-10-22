@@ -31,6 +31,7 @@ bash .claude/skills/optimize-datamart-incremental/scripts/trocco-api.sh "/job_de
 
 ## 前提知識（必ず先に読む）
 - [`knowledge/trocco-api.md`](./references/trocco-api.md)
+- [`knowledge/trocco-api-update.md`](./references/trocco-api-update.md): 更新（PATCH）の挙動（差分更新・配列の洗い替え・ネストの部分更新）とエラーレスポンスの形
 - [`knowledge/datamart-write-modes.md`](./references/datamart-write-modes.md): フィールド仕様・適否 5 パターン・手順
 - 一次情報（手動手順）: https://zenn.dev/primenumber/articles/c269ce4d26f3e6
 

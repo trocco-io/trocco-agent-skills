@@ -30,6 +30,7 @@ bash .claude/skills/audit-stale-teams/scripts/trocco-api.sh "/job_definitions?li
 
 ## 前提知識（必ず先に読む）
 - [`knowledge/trocco-api.md`](./references/trocco-api.md)
+- [`knowledge/trocco-api-update.md`](./references/trocco-api-update.md): 更新（PATCH）の挙動（差分更新・配列の洗い替え・ネストの部分更新）とエラーレスポンスの形
 - [`knowledge/teams.md`](./references/teams.md): 検出ロジック（A: 未参照 / B: メンバー重複）と統合手順
 - [`knowledge/resource-groups.md`](./references/resource-groups.md): チーム↔リソースグループの関係
 

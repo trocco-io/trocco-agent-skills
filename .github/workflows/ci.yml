@@ -32,9 +32,18 @@ jobs:
           echo "broken=$broken"
           [ "$broken" -eq 0 ]
 
+      - name: ラッパーの User-Agent のバージョンと apm.yml の一致を検査
+        # ラッパーは API のアクセスログで識別できるよう trocco-agent-skills/<version> を名乗る。
+        # apm.yml の version を上げたときに追従漏れが無いよう、機械的に突き合わせる。
+        run: |
+          pkg=$(sed -nE 's/^version:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/p' apm.yml)
+          ua=$(sed -nE 's/^TROCCO_AGENT_SKILLS_VERSION="([^"]+)".*/\1/p' bin/trocco-api.sh)
+          echo "apm.yml=$pkg wrapper=$ua"
+          [ -n "$pkg" ] && [ "$pkg" = "$ua" ]
+
       - name: シェルスクリプトの構文検査
         run: |
-          for f in bin/trocco-api.sh .apm/hooks/scripts/*.sh scripts/*.sh; do
+          for f in bin/trocco-api.sh .apm/hooks/scripts/*.sh scripts/*.sh .apm/skills/*/scripts/*.sh; do
             [ -f "$f" ] || continue
             bash -n "$f" && echo "ok: $f"
           done
@@ -58,14 +67,51 @@ jobs:
           expect deny  'declare -p'
           expect deny  'curl -v https://trocco.io/api/teams'
           expect deny  'curl -sSv https://example.com'
+          expect deny  'curl https://example.com -v'
           expect deny  'curl -sS https://trocco.io/api/job_definitions'
           expect deny  'curl -sS -H \"Authorization: Token $TROCCO_API_KEY\" https://trocco.io/api/teams'
           expect allow  'bin/trocco-api.sh /job_definitions?limit=200'
           expect allow  'bash .claude/skills/audit-2fa/scripts/trocco-api.sh /job_definitions?limit=200'
           expect allow  'set -euo pipefail; jq . file.json'
           expect allow  'env FOO=bar ls'
+          expect deny  'curl -sS trocco.io/api/teams'
           expect allow  'curl -sS https://example.com/data.json'
+          expect allow  'curl -sS -G https://example.com/v1/items -o out.json'
+          expect allow  'curl -sS https://documents.trocco.io/apidocs.md'
+          expect allow  'curl -sS -G https://help.trocco.io/api/v2/help_center/articles/search.json --data-urlencode query=OutOfMemoryError'
           expect allow  'git commit -m \"feat: add\"'
+          expect deny  'cat /tmp/w/.raw/log.txt'
+          expect deny  'grep -n ERROR /tmp/w/.raw/error_log.txt'
+          expect deny  'jq . /tmp/w/.raw/definition.json'
+          expect allow  'bash .claude/skills/troubleshoot-job-logs/scripts/redact.sh mask /tmp/w/.raw/log.txt 1 5'
+          expect allow  'bash .claude/skills/troubleshoot-job-logs/scripts/fetch-job-logs.sh jobs 123 /tmp/w'
+          expect allow  'rm -rf /tmp/w/.raw'
+          expect allow  'grep -n Error /tmp/w/log.txt'
+          [ "$fail" -eq 0 ]
+
+      - name: 実行ログの伏せ字化の回帰テスト
+        # 実行ログのホスト名・ユーザー名・データの値は AI の入力に入れない。許可リスト方式（allow）で
+        # 機密らしい値が消え、原因調査に要るエラーの手掛かりが残ることを確認する。
+        run: |
+          R=.apm/skills/troubleshoot-job-logs/scripts/redact.sh
+          f=$(mktemp)
+          cat > "$f" <<'LOG'
+          2026-10-20 03:11:13.145 +0000 [ERROR]: Caused by: org.embulk.input.http.HttpException: Request is not successful, code=400, body={"error":"ParameterMissing","description":"Parameter Invalid organization_memberships is required"}
+          2026-10-20 03:06:02.170 +0000 [ERROR]: WARNING: Invalid cookie header: "set-cookie: dummy_cookie=thisisdummycookiesonoonecanuseit; path=/"
+          2026-10-20 00:03:58.728 +0000 [ERROR]: Caused by: (RateLimitError) RESOURCE_EXHAUSTED: Quota exceeded for service 'sheets.googleapis.com' for consumer 'project_number:123456789012'.
+          2026-10-19 19:27:34.981 +0000 [INFO]: Error: Unsupported type LONGBLOB (sqlType=-4) of 'secret_column' column.
+          2026-10-19 19:27:34.981 +0000 [INFO]: Access denied for user 'taro.yamada'@'db01.example.co.jp' (using password: YES) to /home/taro/data.csv
+          2026-10-19 19:27:34.981 +0000 [INFO]: 山田太郎 さんのレコード 9876543210123 で型変換に失敗
+          LOG
+          out=$(bash "$R" allow "$f")
+          printf '%s\n' "$out"
+          fail=0
+          for leak in organization_memberships thisisdummycookie googleapis 123456789012 secret_column taro yamada example.co.jp db01 /home 山田 9876543210123; do
+            if printf '%s' "$out" | grep -q -- "$leak"; then echo "LEAK: $leak"; fail=1; fi
+          done
+          for keep in HttpException code=400 ParameterMissing RESOURCE_EXHAUSTED 'Quota exceeded' RateLimitError LONGBLOB 'Unsupported type' 'Access denied' password; do
+            if ! printf '%s' "$out" | grep -q -- "$keep"; then echo "LOST: $keep"; fail=1; fi
+          done
           [ "$fail" -eq 0 ]
 
       - name: 紛らわしいダッシュ記号の検査

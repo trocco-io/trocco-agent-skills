@@ -30,7 +30,8 @@ bash .claude/skills/govern-naming/scripts/trocco-api.sh "/job_definitions?limit=
 ```
 
 ## 前提知識（必ず先に読む）
-- [`knowledge/trocco-api.md`](./references/trocco-api.md): 認証・ページング・PATCH の挙動
+- [`knowledge/trocco-api.md`](./references/trocco-api.md): 認証・ページング
+- [`knowledge/trocco-api-update.md`](./references/trocco-api-update.md): 更新（PATCH）の挙動（差分更新・配列の洗い替え・ネストの部分更新）とエラーレスポンスの形
 - [`knowledge/naming-conventions.md`](./references/naming-conventions.md): テンプレ・導出・トークン決定可否・修正フロー
 
 ## 手順

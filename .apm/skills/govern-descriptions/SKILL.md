@@ -30,6 +30,7 @@ bash .claude/skills/govern-descriptions/scripts/trocco-api.sh "/job_definitions?
 
 ## 前提知識（必ず先に読む）
 - [`knowledge/trocco-api.md`](./references/trocco-api.md)
+- [`knowledge/trocco-api-update.md`](./references/trocco-api-update.md): 更新（PATCH）の挙動（差分更新・配列の洗い替え・ネストの部分更新）とエラーレスポンスの形
 - [`knowledge/descriptions.md`](./references/descriptions.md): 検出方法・生成の材料と方針
 
 ## 手順
@@ -65,6 +66,8 @@ bash .claude/skills/govern-descriptions/scripts/trocco-api.sh "/job_definitions?
 ### 3. 説明文の生成（事実ベース）
 - 「入力 → 処理 → 出力 → 頻度」の順で 1〜3 文にまとめる。
 - 設定に書かれた事実のみ。SQL の意図を過剰に推測しない。
+- **スケジュールの ON/OFF は API で判別できない**。`schedules` があっても実行頻度を断定せず、
+  「スケジュール設定あり（日次 5:00）」程度にするか、稼働しているかをユーザーに確認する。
 - **PII / 認証値 / 社外秘の情報を説明文に転記しない**。
 
 ### 4. 確認して適用

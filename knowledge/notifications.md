@@ -3,7 +3,7 @@
 > 2026-09-09 時点の公開仕様に基づく要約。齟齬があれば https://documents.trocco.io/apidocs.md を正とする。
 
 転送設定・データマート・ワークフローに設定できる通知の構造。
-まず [`trocco-api.md`](./trocco-api.md) を読むこと（特に「配列は洗い替え」の項）。
+まず [`trocco-api.md`](./trocco-api.md) と [`trocco-api-update.md`](./trocco-api-update.md)（特に「差分更新だが配列は洗い替え」の項）を読むこと。
 
 ## 2 段階のモデル: 通知先(destination) と 通知(notification)
 
